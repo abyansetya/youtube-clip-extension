@@ -3,11 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Clip — Settings</title>
+    <title>Comot — Settings</title>
   </head>
   <body>
     <main>
-      <h1>Clip settings</h1>
+      <h1>Comot settings</h1>
 
       <section class="card">
         <h2>Processing service</h2>
@@ -34,9 +34,17 @@
             <small>Preferred height, e.g. 2160, 1080, 720, 480.</small>
           </label>
         </div>
-        <label class="check">
-          <input id="confirm" type="checkbox" />
-          <span>Confirm before starting a download</span>
+      </section>
+
+      <section class="card">
+        <h2>Appearance</h2>
+        <label class="field">
+          <span>Theme</span>
+          <select id="theme">
+            <option value="system">System (follow OS)</option>
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
         </label>
       </section>
 

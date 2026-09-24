@@ -4,7 +4,7 @@ export const DEFAULT_SETTINGS: Settings = {
   serviceUrl: 'http://127.0.0.1:8787',
   defaultFormat: 'mp4',
   defaultQuality: '1080',
-  confirmBeforeDownload: false,
+  theme: 'system',
 }
 
 export async function getSettings(): Promise<Settings> {

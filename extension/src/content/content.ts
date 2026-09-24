@@ -10,7 +10,7 @@ chrome.runtime.onMessage.addListener(
     resolver
       .resolve()
       .then((video) => {
-        console.debug('[clip] resolver result:', video)
+        console.debug('[comot] resolver result:', video)
         sendResponse({
           type: 'GET_VIDEO_INFO_RESULT',
           video,
@@ -20,7 +20,7 @@ chrome.runtime.onMessage.addListener(
         })
       })
       .catch((err: unknown) => {
-        console.error('[clip] resolver error:', err)
+        console.error('[comot] resolver error:', err)
         sendResponse({
           type: 'GET_VIDEO_INFO_RESULT',
           video: null,

@@ -10,7 +10,8 @@ import type {
   VideoInfo,
 } from '../shared/types'
 import { formatTime, parseTime, WATCH_URL } from '../shared/messages'
-import { getSettings, normalizeServiceUrl } from '../shared/settings'
+import { getSettings, normalizeServiceUrl, setSettings } from '../shared/settings'
+import { applyTheme, watchSystemTheme, type Theme } from '../shared/theme'
 
 const $ = <T extends HTMLElement>(id: string): T =>
   document.getElementById(id) as T
@@ -30,11 +31,15 @@ const els = {
   start: $<HTMLInputElement>('start'),
   end: $<HTMLInputElement>('end'),
   downloadBtn: $<HTMLButtonElement>('download'),
+  confirmRow: $<HTMLElement>('confirm-row'),
+  confirmCancel: $<HTMLButtonElement>('confirm-cancel'),
+  confirmYes: $<HTMLButtonElement>('confirm-yes'),
   progress: $<HTMLElement>('progress'),
   bar: $<HTMLProgressElement>('bar'),
   statusText: $<HTMLElement>('status-text'),
   saveFileBtn: $<HTMLButtonElement>('save-file'),
   cancelBtn: $<HTMLButtonElement>('cancel'),
+  themeToggle: $<HTMLButtonElement>('theme-toggle'),
   openOptions: $<HTMLAnchorElement>('open-options'),
 }
 
@@ -45,6 +50,7 @@ let video: VideoInfo | null = null
 let formats: ResolvedFormat[] = []
 let activeJob: JobStatusResponse | null = null
 let pollTimer: number | undefined
+let currentTheme: Theme
 
 init()
 
@@ -54,8 +60,23 @@ function init(): void {
     void chrome.runtime.openOptionsPage()
   })
 
+  els.themeToggle.addEventListener('click', () => {
+    const next: Settings['theme'] = currentTheme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    settings.theme = next
+    void setSettings({ theme: next })
+  })
+  watchSystemTheme(() => {
+    if (settings.theme === 'system') setTheme('system')
+  })
+
   els.format.addEventListener('change', () => renderQualityOptions())
-  els.downloadBtn.addEventListener('click', () => void startDownload())
+  els.downloadBtn.addEventListener('click', startDownload)
+  els.confirmYes.addEventListener('click', () => void startDownloadJob())
+  els.confirmCancel.addEventListener('click', () => {
+    showDownloadButton()
+    validateForm()
+  })
   els.saveFileBtn.addEventListener('click', () => {
     if (activeJob) void startBrowserDownload(activeJob)
   })
@@ -63,7 +84,15 @@ function init(): void {
   els.start.addEventListener('input', validateForm)
   els.end.addEventListener('input', validateForm)
 
+  setTheme(settings.theme)
   void refresh()
+}
+
+function setTheme(pref: Settings['theme']): void {
+  currentTheme = applyTheme(pref)
+  els.themeToggle.textContent = currentTheme === 'dark' ? '☀' : '☾'
+  els.themeToggle.title =
+    currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 }
 
 async function rememberJob(jobId: string | null): Promise<void> {
@@ -243,19 +272,18 @@ function validateForm(): void {
     else if (end !== undefined && video && end > video.duration) valid = false
   }
   els.downloadBtn.disabled = !valid
+  els.confirmYes.disabled = !valid
 }
 
-async function startDownload(): Promise<void> {
+function startDownload(): void {
   if (!video) return
-  if (settings.confirmBeforeDownload && els.downloadBtn.dataset.confirmed !== 'true') {
-    // Inline confirmation — a native confirm() dialog can dismiss the popup.
-    els.downloadBtn.dataset.confirmed = 'true'
-    els.downloadBtn.textContent = 'Confirm download?'
-    return
-  }
-  els.downloadBtn.dataset.confirmed = ''
-  els.downloadBtn.textContent = 'Download'
-  await startDownloadJob()
+  els.downloadBtn.hidden = true
+  els.confirmRow.hidden = false
+}
+
+function showDownloadButton(): void {
+  els.downloadBtn.hidden = false
+  els.confirmRow.hidden = true
 }
 
 async function startDownloadJob(): Promise<void> {
@@ -274,7 +302,7 @@ async function startDownloadJob(): Promise<void> {
   els.cancelBtn.hidden = false
   els.bar.value = 0
   setStatusText('Starting download…')
-  console.debug('[clip] starting download request')
+  console.debug('[comot] starting download request')
 
   // Start the job directly against the processing service.
   const base = normalizeServiceUrl(settings.serviceUrl)
@@ -306,14 +334,16 @@ async function startDownloadJob(): Promise<void> {
       window.clearTimeout(timeout)
     }
   } catch (err) {
-    console.error('[clip] failed to create job:', err)
+    console.error('[comot] failed to create job:', err)
     els.form.hidden = false
     els.progress.hidden = true
+    showDownloadButton()
+    validateForm()
     setStatusText(`Failed to start: ${(err as Error).message}`, true)
     return
   }
 
-  console.debug('[clip] job created:', jobId)
+  console.debug('[comot] job created:', jobId)
   els.bar.value = 1
   setStatusText('Queued — processing on the service…')
   await rememberJob(jobId)
@@ -328,10 +358,10 @@ function pollJob(jobId: string): void {
       const res = await fetch(`${base}/api/jobs/${jobId}`, { cache: 'no-store' })
       if (!res.ok) throw new Error(`Job query failed (${res.status})`)
       const job = (await res.json()) as JobStatusResponse
-      console.debug('[clip] job update:', job.status, job.progress)
+      console.debug('[comot] job update:', job.status, job.progress)
       onJobUpdate(job)
     } catch (err) {
-      console.error('[clip] poll failed:', err)
+      console.error('[comot] poll failed:', err)
       window.clearInterval(pollTimer)
       setStatusText(`Cannot reach service: ${(err as Error).message}`, true)
     }
@@ -345,7 +375,6 @@ function onJobUpdate(job: JobStatusResponse): void {
   if (job.status === 'done') {
     window.clearInterval(pollTimer)
     void rememberJob(null)
-    els.downloadBtn.disabled = true
     els.cancelBtn.hidden = true
     els.saveFileBtn.hidden = false
     void startBrowserDownload(job)
@@ -353,7 +382,6 @@ function onJobUpdate(job: JobStatusResponse): void {
     window.clearInterval(pollTimer)
     void rememberJob(null)
     setStatusText(job.error ?? 'Download failed', true)
-    els.downloadBtn.disabled = true
     els.cancelBtn.hidden = true
   } else if (job.status === 'cancelled') {
     window.clearInterval(pollTimer)
@@ -372,7 +400,7 @@ async function cancelDownload(): Promise<void> {
   try {
     await fetch(`${base}/api/jobs/${jobId}/cancel`, { method: 'POST' })
   } catch (err) {
-    console.error('[clip] cancel request failed:', err)
+    console.error('[comot] cancel request failed:', err)
   }
   await rememberJob(null)
   resetAfterCancel()
@@ -384,8 +412,7 @@ function resetAfterCancel(): void {
   els.saveFileBtn.hidden = true
   els.cancelBtn.hidden = true
   els.form.hidden = false
-  els.downloadBtn.dataset.confirmed = ''
-  els.downloadBtn.textContent = 'Download'
+  showDownloadButton()
   validateForm()
   setStatusText('')
 }
@@ -404,10 +431,10 @@ async function startBrowserDownload(job: JobStatusResponse): Promise<void> {
       filename: job.filename ?? 'video.mp4',
       saveAs: true,
     })
-    console.debug('[clip] download started:', id)
+    console.debug('[comot] download started:', id)
     setStatusText('Done — saving to your downloads…', false)
   } catch (err) {
-    console.error('[clip] download trigger failed:', err)
+    console.error('[comot] download trigger failed:', err)
     setStatusText('File ready — click "Save file" to download it', true)
   }
 }

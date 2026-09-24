@@ -1,4 +1,4 @@
-# Clip — YouTube Downloader & Segment Clipper
+# Comot — YouTube Downloader & Segment Clipper
 
 Chromium browser extension + local processing service to download YouTube videos (full or trimmed segments) as MP4 / M4A.
 
@@ -59,7 +59,7 @@ Load `extension/dist/` via `chrome://extensions` → Developer mode → "Load un
 
 ### 3. Use
 
-Open a YouTube video, click the Clip extension icon, pick format/quality and
+Open a YouTube video, click the Comot extension icon, pick format/quality and
 optional start/end timestamps, then Download. Keep the service running.
 
 ## Tests

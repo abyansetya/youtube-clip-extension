@@ -64,11 +64,13 @@ export interface JobStatusResponse {
   error?: string
 }
 
+export type ThemePreference = 'system' | 'dark' | 'light'
+
 export interface Settings {
   serviceUrl: string
   defaultFormat: string
   defaultQuality: string
-  confirmBeforeDownload: boolean
+  theme: ThemePreference
 }
 
 export interface HealthResponse {

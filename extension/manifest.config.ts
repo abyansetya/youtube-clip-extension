@@ -2,14 +2,14 @@ import { defineManifest } from '@crxjs/vite-plugin'
 
 export default defineManifest({
   manifest_version: 3,
-  name: 'Clip — YouTube Downloader & Segment Clipper',
+  name: 'Comot — YouTube Downloader & Segment Clipper',
   version: '0.1.0',
   description:
     'Download YouTube videos or segments as MP4 / M4A via a local processing service.',
   minimum_chrome_version: '116',
   action: {
     default_popup: 'src/popup/index.html',
-    default_title: 'Clip',
+    default_title: 'Comot',
     default_icon: {
       '16': 'icons/16.png',
       '32': 'icons/32.png',

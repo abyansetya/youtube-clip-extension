@@ -196,7 +196,7 @@ async function triggerDownload(jobId: string, filename?: string): Promise<void> 
       saveAs: true,
     })
   } catch (err) {
-    console.error('[clip] download trigger failed:', err)
+    console.error('[comot] download trigger failed:', err)
     broadcast({
       type: 'JOB_UPDATE',
       job: {
