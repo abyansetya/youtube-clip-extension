@@ -37,3 +37,8 @@ def test_download_accepts_camelcase_format_id():
         json={"url": "x", "formatId": "video:best"},
     )
     assert res.status_code == 202
+
+
+def test_cancel_unknown_job():
+    res = client.post("/api/jobs/nope/cancel")
+    assert res.status_code == 404

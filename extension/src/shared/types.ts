@@ -53,6 +53,7 @@ export type JobStatus =
   | 'processing'
   | 'done'
   | 'error'
+  | 'cancelled'
 
 export interface JobStatusResponse {
   jobId: string

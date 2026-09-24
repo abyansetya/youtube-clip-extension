@@ -24,6 +24,11 @@
         Open a YouTube video, then reopen this popup.
       </p>
 
+      <p id="loading" class="loading" hidden>
+        <span class="spinner"></span>
+        <span id="loading-text">Loading video…</span>
+      </p>
+
       <form id="download-form" hidden>
         <label class="field">
           <span>Format</span>
@@ -57,7 +62,10 @@
       <section id="progress" class="progress" hidden>
         <progress id="bar" max="100" value="0"></progress>
         <p id="status-text"></p>
-        <button id="save-file" type="button" hidden>Save file</button>
+        <div class="progress-actions">
+          <button id="save-file" type="button" hidden>Save file</button>
+          <button id="cancel" type="button" hidden>Cancel</button>
+        </div>
       </section>
 
       <footer>

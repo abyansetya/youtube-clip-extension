@@ -93,6 +93,7 @@ def main() -> int:
     check("trim file non-empty", len(trim_bytes) > 0, f"{len(trim_bytes)} bytes")
 
     ffprobe = shutil.which("ffprobe")
+    ffmpeg = shutil.which("ffmpeg")
     if ffprobe:
         tmp = "data/_e2e_trim.mp4"
         with open(tmp, "wb") as fh:
@@ -103,8 +104,14 @@ def main() -> int:
             capture_output=True, text=True,
         )
         duration = float(out.stdout.strip() or 0)
-        os.remove(tmp)
         check("trim ~5s", 4.0 <= duration <= 6.5, f"duration={duration:.2f}s")
+        if ffmpeg:
+            dec = subprocess.run(
+                [ffmpeg, "-v", "error", "-i", tmp, "-f", "null", "-"],
+                capture_output=True, text=True,
+            )
+            check("trim fully decodable", dec.returncode == 0, dec.stderr.strip()[:120])
+        os.remove(tmp)
     else:
         print("  SKIP: ffprobe not found")
 

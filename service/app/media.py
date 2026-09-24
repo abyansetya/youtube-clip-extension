@@ -27,11 +27,11 @@ def trim(
 ) -> None:
     """Trim a media file to the [start, end] range.
 
-    Fast-seeks (`-ss` before `-i`) so long videos are not decoded from the top,
-    then stream-copies. `-copyts` keeps the original timestamps so the muxer
-    writes a correct duration (without it, `-c copy` output duration is derived
-    from the last packet PTS and can be wrong). Falls back to re-encoding when
-    the copy pass fails.
+    Re-encodes the segment with H.264/AAC. Stream-copy trims were rejected
+    because they preserve non-zero source timestamps, which produce files most
+    media players refuse to open. Re-encoding resets timestamps and always
+    yields a clean, playable MP4; the cost is CPU time, which is acceptable for
+    MVP reliability.
     """
     if start is None and end is None:
         raise ValueError("Nothing to trim")
@@ -44,31 +44,22 @@ def trim(
     elif end is not None:
         duration = end
 
-    def build(encode: list[str]) -> list[str]:
-        args = [settings.resolved_ffmpeg(), "-y"]
-        if start is not None:
-            args += ["-ss", f"{start:.3f}"]
-        args += ["-i", str(input_path)]
-        if duration is not None:
-            args += ["-t", f"{duration:.3f}"]
-        args += encode + [str(output_path)]
-        return args
-
-    copy_args = [
-        "-c", "copy",
-        "-avoid_negative_ts", "make_zero",
-        "-copyts",
-    ]
-    if _run(build(copy_args)):
-        return
-
-    # Fallback: re-encode (accurate trim regardless of keyframes).
-    enc = [
+    args = [settings.resolved_ffmpeg(), "-y"]
+    if start is not None:
+        args += ["-ss", f"{start:.3f}"]
+    args += ["-i", str(input_path)]
+    if duration is not None:
+        args += ["-t", f"{duration:.3f}"]
+    args += [
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
         "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart",
+        "-avoid_negative_ts", "make_zero",
+        str(output_path),
     ]
-    if not _run(build(enc)):
-        raise RuntimeError("FFmpeg trimming failed (copy and re-encode attempts)")
+
+    if not _run(args):
+        raise RuntimeError("FFmpeg trimming failed")
 
 
 def _run(args: list[str]) -> bool:

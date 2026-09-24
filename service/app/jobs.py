@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 import yt_dlp
+from yt_dlp.utils import DownloadCancelled
 
 from .config import settings
 from .media import trim
@@ -21,6 +22,7 @@ STATUS_DOWNLOADING = "downloading"
 STATUS_PROCESSING = "processing"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
+STATUS_CANCELLED = "cancelled"
 
 
 @dataclass
@@ -36,12 +38,23 @@ class Job:
     filename: str | None = None
     error: str | None = None
     workdir: Path = field(default_factory=lambda: settings.work_dir / uuid.uuid4().hex[:8])
+    cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def update(self, **kw) -> None:
         with self._lock:
             for key, value in kw.items():
                 setattr(self, key, value)
+
+    def cancel(self) -> bool:
+        """Request cancellation. Returns False if the job already finished."""
+        with self._lock:
+            if self.status in (STATUS_DONE, STATUS_ERROR, STATUS_CANCELLED):
+                return False
+            self.status = STATUS_CANCELLED
+            self.message = "Cancelled"
+        self.cancelled.set()
+        return True
 
 
 class JobManager:
@@ -92,7 +105,7 @@ class JobManager:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(job.url, download=True)
 
-            if job.status == STATUS_ERROR:
+            if job.cancelled.is_set():
                 return
 
             downloaded = Path(ydl.prepare_filename(info))
@@ -106,6 +119,8 @@ class JobManager:
             final_path = settings.output_dir / final_name
 
             if job.start is not None or job.end is not None:
+                if job.cancelled.is_set():
+                    return
                 job.update(status=STATUS_PROCESSING, progress=85, message="Trimming…")
                 trimmed_tmp = settings.output_dir / f".{final_name}.tmp{downloaded.suffix}"
                 trim(downloaded, trimmed_tmp, job.start, job.end)
@@ -115,6 +130,9 @@ class JobManager:
             else:
                 shutil.move(str(downloaded), str(final_path))
 
+            if job.cancelled.is_set():
+                return
+
             job.update(
                 status=STATUS_DONE,
                 progress=100,
@@ -122,6 +140,8 @@ class JobManager:
                 filename=final_path.name,
             )
         except Exception as exc:  # noqa: BLE001 - surface any failure to the client
+            if job.cancelled.is_set():
+                return
             job.update(
                 status=STATUS_ERROR,
                 progress=job.progress,
@@ -144,6 +164,8 @@ class JobManager:
 
     def _make_progress_hook(self, job: Job):
         def hook(d: dict) -> None:
+            if job.cancelled.is_set():
+                raise DownloadCancelled("cancelled by user")
             if d.get("status") == "downloading":
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
                 downloaded = d.get("downloaded_bytes") or 0

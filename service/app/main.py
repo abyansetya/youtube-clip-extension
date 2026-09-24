@@ -85,6 +85,23 @@ def job_status(job_id: str) -> JobResponse:
     )
 
 
+@app.post("/api/jobs/{job_id}/cancel", response_model=JobResponse)
+def cancel_job(job_id: str) -> JobResponse:
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not job.cancel():
+        raise HTTPException(status_code=409, detail="Job already finished or cancelled")
+    return JobResponse(
+        jobId=job.id,
+        status=job.status,
+        progress=job.progress,
+        message=job.message,
+        filename=job.filename,
+        error=job.error,
+    )
+
+
 @app.get("/api/jobs/{job_id}/file")
 def job_file(job_id: str) -> FileResponse:
     job = jobs.get(job_id)

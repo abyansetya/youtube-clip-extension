@@ -22,6 +22,8 @@ const els = {
   title: $<HTMLElement>('title'),
   duration: $<HTMLElement>('duration'),
   emptyState: $<HTMLElement>('empty-state'),
+  loading: $<HTMLElement>('loading'),
+  loadingText: $<HTMLElement>('loading-text'),
   form: $<HTMLFormElement>('download-form'),
   format: $<HTMLSelectElement>('format'),
   quality: $<HTMLSelectElement>('quality'),
@@ -32,8 +34,11 @@ const els = {
   bar: $<HTMLProgressElement>('bar'),
   statusText: $<HTMLElement>('status-text'),
   saveFileBtn: $<HTMLButtonElement>('save-file'),
+  cancelBtn: $<HTMLButtonElement>('cancel'),
   openOptions: $<HTMLAnchorElement>('open-options'),
 }
+
+const SESSION_JOB_KEY = 'activeJobId'
 
 let settings: Settings = await getSettings()
 let video: VideoInfo | null = null
@@ -54,25 +59,30 @@ function init(): void {
   els.saveFileBtn.addEventListener('click', () => {
     if (activeJob) void startBrowserDownload(activeJob)
   })
+  els.cancelBtn.addEventListener('click', () => void cancelDownload())
   els.start.addEventListener('input', validateForm)
   els.end.addEventListener('input', validateForm)
 
   void refresh()
 }
 
+async function rememberJob(jobId: string | null): Promise<void> {
+  if (jobId) await chrome.storage.session.set({ [SESSION_JOB_KEY]: jobId })
+  else await chrome.storage.session.remove(SESSION_JOB_KEY)
+}
+
 async function refresh(): Promise<void> {
   setServiceStatus(await queryServiceStatus())
 
-  // Detect the video deterministically from the active tab's URL — no content
-  // script round trip. The service resolves metadata + formats in one call.
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   const videoId = tab?.url ? videoIdFromUrl(tab.url) : null
   if (!videoId) {
+    hideLoading()
     showEmpty('Open a YouTube video, then reopen this popup.')
     return
   }
 
-  setStatusText('Resolving video…')
+  showLoading('Loading video…')
   const base = normalizeServiceUrl(settings.serviceUrl)
   try {
     const res = await fetch(`${base}/api/resolve`, {
@@ -95,17 +105,29 @@ async function refresh(): Promise<void> {
       streams: [],
     }
     formats = data.formats ?? []
+    hideLoading()
     showVideo(video)
     renderFormatAndQuality()
     if (!formats.length) {
-      setStatusText(
-        'This video has no downloadable formats (may be restricted).',
-        true,
-      )
+      setStatusText('This video has no downloadable formats (may be restricted).', true)
     }
     validateForm()
   } catch (err) {
+    hideLoading()
     showEmpty(`Could not resolve video: ${(err as Error).message}`)
+    return
+  }
+
+  // Resume an in-progress download that survived a popup close/reopen.
+  const stored = await chrome.storage.session.get(SESSION_JOB_KEY)
+  const jobId: string | undefined = stored[SESSION_JOB_KEY]
+  if (jobId) {
+    els.form.hidden = true
+    els.progress.hidden = false
+    els.saveFileBtn.hidden = true
+    els.cancelBtn.hidden = false
+    setStatusText('Resuming download…')
+    pollJob(jobId)
   }
 }
 
@@ -141,7 +163,20 @@ function setServiceStatus(message: RuntimeMessage): void {
   els.serviceStatus.title = message.error ?? ''
 }
 
+function showLoading(text: string): void {
+  els.loading.hidden = false
+  els.loadingText.textContent = text
+  els.emptyState.hidden = true
+  els.videoInfo.hidden = true
+  els.form.hidden = true
+}
+
+function hideLoading(): void {
+  els.loading.hidden = true
+}
+
 function showEmpty(error?: string): void {
+  hideLoading()
   els.emptyState.hidden = false
   els.emptyState.textContent = error ?? 'Open a YouTube video, then reopen this popup.'
   els.videoInfo.hidden = true
@@ -150,6 +185,7 @@ function showEmpty(error?: string): void {
 }
 
 function showVideo(v: VideoInfo): void {
+  hideLoading()
   els.emptyState.hidden = true
   els.videoInfo.hidden = false
   els.form.hidden = false
@@ -235,6 +271,7 @@ async function startDownloadJob(): Promise<void> {
   els.form.hidden = true
   els.progress.hidden = false
   els.saveFileBtn.hidden = true
+  els.cancelBtn.hidden = false
   els.bar.value = 0
   setStatusText('Starting download…')
   console.debug('[clip] starting download request')
@@ -279,6 +316,7 @@ async function startDownloadJob(): Promise<void> {
   console.debug('[clip] job created:', jobId)
   els.bar.value = 1
   setStatusText('Queued — processing on the service…')
+  await rememberJob(jobId)
   pollJob(jobId)
 }
 
@@ -306,14 +344,50 @@ function onJobUpdate(job: JobStatusResponse): void {
   setStatusText(job.message ?? job.status)
   if (job.status === 'done') {
     window.clearInterval(pollTimer)
+    void rememberJob(null)
     els.downloadBtn.disabled = true
+    els.cancelBtn.hidden = true
     els.saveFileBtn.hidden = false
     void startBrowserDownload(job)
   } else if (job.status === 'error') {
     window.clearInterval(pollTimer)
+    void rememberJob(null)
     setStatusText(job.error ?? 'Download failed', true)
     els.downloadBtn.disabled = true
+    els.cancelBtn.hidden = true
+  } else if (job.status === 'cancelled') {
+    window.clearInterval(pollTimer)
+    void rememberJob(null)
+    resetAfterCancel()
   }
+}
+
+async function cancelDownload(): Promise<void> {
+  if (!activeJob) return
+  const jobId = activeJob.jobId
+  window.clearInterval(pollTimer)
+  setStatusText('Cancelling…')
+
+  const base = normalizeServiceUrl(settings.serviceUrl)
+  try {
+    await fetch(`${base}/api/jobs/${jobId}/cancel`, { method: 'POST' })
+  } catch (err) {
+    console.error('[clip] cancel request failed:', err)
+  }
+  await rememberJob(null)
+  resetAfterCancel()
+}
+
+function resetAfterCancel(): void {
+  activeJob = null
+  els.progress.hidden = true
+  els.saveFileBtn.hidden = true
+  els.cancelBtn.hidden = true
+  els.form.hidden = false
+  els.downloadBtn.dataset.confirmed = ''
+  els.downloadBtn.textContent = 'Download'
+  validateForm()
+  setStatusText('')
 }
 
 async function startBrowserDownload(job: JobStatusResponse): Promise<void> {
