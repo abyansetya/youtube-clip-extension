@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Clip</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Clip</h1>
+        <span id="service-status" class="status" data-state="unknown">checking service…</span>
+      </header>
+
+      <section id="video-info" class="video-info" hidden>
+        <img id="thumb" alt="" class="thumb" />
+        <div class="video-meta">
+          <h2 id="title">—</h2>
+          <p id="duration">—</p>
+        </div>
+      </section>
+
+      <p id="empty-state" class="empty">
+        Open a YouTube video, then reopen this popup.
+      </p>
+
+      <form id="download-form" hidden>
+        <label class="field">
+          <span>Format</span>
+          <select id="format">
+            <option value="mp4">MP4 (video)</option>
+            <option value="m4a">M4A (audio only)</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Quality</span>
+          <select id="quality">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+
+        <div class="row">
+          <label class="field">
+            <span>Start</span>
+            <input id="start" type="text" placeholder="MM:SS" autocomplete="off" />
+          </label>
+          <label class="field">
+            <span>End</span>
+            <input id="end" type="text" placeholder="MM:SS (blank = full)" autocomplete="off" />
+          </label>
+        </div>
+
+        <button id="download" type="button" disabled>Download</button>
+      </form>
+
+      <section id="progress" class="progress" hidden>
+        <progress id="bar" max="100" value="0"></progress>
+        <p id="status-text"></p>
+        <button id="save-file" type="button" hidden>Save file</button>
+      </section>
+
+      <footer>
+        <a id="open-options" href="#">Settings</a>
+      </footer>
+    </div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

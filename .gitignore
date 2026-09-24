@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.venv/
+
+# Build output
+extension/dist/
+extension/.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Runtime artifacts (service working/output dirs)
+service/data/
+
+# Env / local config
+.env
+.env.local
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+*.md
+!README.md

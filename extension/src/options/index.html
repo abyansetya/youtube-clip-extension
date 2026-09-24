@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Clip — Settings</title>
+  </head>
+  <body>
+    <main>
+      <h1>Clip settings</h1>
+
+      <section class="card">
+        <h2>Processing service</h2>
+        <label class="field">
+          <span>Service URL</span>
+          <input id="service-url" type="url" placeholder="http://127.0.0.1:8787" />
+          <small>The local/backend processing service (yt-dlp + FFmpeg).</small>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Defaults</h2>
+        <div class="row">
+          <label class="field">
+            <span>Format</span>
+            <select id="default-format">
+              <option value="mp4">MP4 (video)</option>
+              <option value="m4a">M4A (audio only)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Quality</span>
+            <input id="default-quality" type="text" placeholder="1080" />
+            <small>Preferred height, e.g. 2160, 1080, 720, 480.</small>
+          </label>
+        </div>
+        <label class="check">
+          <input id="confirm" type="checkbox" />
+          <span>Confirm before starting a download</span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Compliance</h2>
+        <p class="notice">
+          Only download content you own or are authorized to download (e.g. your
+          own uploads, Creative Commons, or public domain). Respect copyright and
+          YouTube's Terms of Service.
+        </p>
+      </section>
+
+      <button id="save" type="button">Save</button>
+      <p id="saved" class="saved" hidden>Saved</p>
+    </main>
+
+    <script type="module" src="./options.ts"></script>
+  </body>
+</html>
