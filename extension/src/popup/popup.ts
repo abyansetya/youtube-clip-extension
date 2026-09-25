@@ -95,6 +95,27 @@ function setTheme(pref: Settings['theme']): void {
     currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'
 }
 
+function setBadge(text: string): void {
+  if (text) {
+    void chrome.action.setBadgeText({ text }).catch(() => undefined)
+    void chrome.action.setBadgeBackgroundColor({ color: '#3ea6ff' }).catch(() => undefined)
+  } else {
+    void chrome.action.setBadgeText({ text: '' }).catch(() => undefined)
+  }
+}
+
+function trackJob(jobId: string): void {
+  void chrome.runtime
+    .sendMessage({ type: 'TRACK_JOB', jobId })
+    .catch(() => undefined)
+}
+
+function untrackJob(): void {
+  void chrome.runtime
+    .sendMessage({ type: 'UNTRACK_JOB' })
+    .catch(() => undefined)
+}
+
 async function rememberJob(jobId: string | null): Promise<void> {
   if (jobId) await chrome.storage.session.set({ [SESSION_JOB_KEY]: jobId })
   else await chrome.storage.session.remove(SESSION_JOB_KEY)
@@ -156,7 +177,10 @@ async function refresh(): Promise<void> {
     els.saveFileBtn.hidden = true
     els.cancelBtn.hidden = false
     setStatusText('Resuming download…')
+    trackJob(jobId)
     pollJob(jobId)
+  } else {
+    setBadge('')
   }
 }
 
@@ -245,7 +269,8 @@ function renderQualityOptions(): void {
     for (const f of opts) {
       const o = document.createElement('option')
       o.value = f.id
-      o.textContent = f.label
+      const detail = [f.container, f.codec].filter(Boolean).join(' ')
+      o.textContent = detail ? `${f.label} (${detail})` : f.label
       els.quality.appendChild(o)
     }
   }
@@ -347,6 +372,7 @@ async function startDownloadJob(): Promise<void> {
   els.bar.value = 1
   setStatusText('Queued — processing on the service…')
   await rememberJob(jobId)
+  trackJob(jobId)
   pollJob(jobId)
 }
 
@@ -356,6 +382,20 @@ function pollJob(jobId: string): void {
     const base = normalizeServiceUrl(settings.serviceUrl)
     try {
       const res = await fetch(`${base}/api/jobs/${jobId}`, { cache: 'no-store' })
+      if (res.status === 404) {
+        // Job no longer exists on the service (e.g. service restarted).
+        window.clearInterval(pollTimer)
+        await rememberJob(null)
+        untrackJob()
+        setBadge('')
+        els.progress.hidden = true
+        els.saveFileBtn.hidden = true
+        els.cancelBtn.hidden = true
+        els.form.hidden = false
+        showDownloadButton()
+        setStatusText('That download job expired — try again.', true)
+        return
+      }
       if (!res.ok) throw new Error(`Job query failed (${res.status})`)
       const job = (await res.json()) as JobStatusResponse
       console.debug('[comot] job update:', job.status, job.progress)
@@ -375,18 +415,26 @@ function onJobUpdate(job: JobStatusResponse): void {
   if (job.status === 'done') {
     window.clearInterval(pollTimer)
     void rememberJob(null)
+    untrackJob()
+    setBadge('')
     els.cancelBtn.hidden = true
     els.saveFileBtn.hidden = false
     void startBrowserDownload(job)
   } else if (job.status === 'error') {
     window.clearInterval(pollTimer)
     void rememberJob(null)
+    untrackJob()
+    setBadge('')
     setStatusText(job.error ?? 'Download failed', true)
     els.cancelBtn.hidden = true
   } else if (job.status === 'cancelled') {
     window.clearInterval(pollTimer)
     void rememberJob(null)
+    untrackJob()
+    setBadge('')
     resetAfterCancel()
+  } else {
+    setBadge(`${Math.round(job.progress)}%`)
   }
 }
 
@@ -403,6 +451,8 @@ async function cancelDownload(): Promise<void> {
     console.error('[comot] cancel request failed:', err)
   }
   await rememberJob(null)
+  untrackJob()
+  setBadge('')
   resetAfterCancel()
 }
 

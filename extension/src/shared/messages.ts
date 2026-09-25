@@ -21,6 +21,9 @@ export type RuntimeMessage =
   | { type: 'JOB_UPDATE'; job: JobStatusResponse }
   | { type: 'CLAIM_DOWNLOAD'; jobId: string }
   | { type: 'CLAIM_DOWNLOAD_RESULT' }
+  | { type: 'TRACK_JOB'; jobId: string }
+  | { type: 'UNTRACK_JOB' }
+  | { type: 'TRACK_JOB_RESULT' }
   | { type: 'GET_SETTINGS' }
   | { type: 'SETTINGS'; settings: Settings }
   | { type: 'SERVICE_STATUS'; health: HealthResponse | null; error?: string }

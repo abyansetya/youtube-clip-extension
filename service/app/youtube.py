@@ -1,7 +1,5 @@
 """YouTube stream resolution via yt-dlp."""
 
-import re
-
 import yt_dlp
 
 from .schemas import ResolveResponse, ResolvedFormat
@@ -17,10 +15,25 @@ _RESOLVE_OPTS = {
 }
 
 
+_CODEC_NAMES = {
+    "avc1": "H.264",
+    "h264": "H.264",
+    "vp9": "VP9",
+    "vp8": "VP8",
+    "av01": "AV1",
+    "mp4a": "AAC",
+    "aac": "AAC",
+    "opus": "Opus",
+    "mp3": "MP3",
+    "flac": "FLAC",
+}
+
+
 def _codec_safe(vcodec: str | None) -> str | None:
     if not vcodec or vcodec == "none":
         return None
-    return re.split(r"[/.]+", vcodec)[0]
+    key = vcodec.lower().split(".")[0]
+    return _CODEC_NAMES.get(key, key)
 
 
 def resolve(url: str) -> ResolveResponse:
@@ -84,6 +97,7 @@ def resolve(url: str) -> ResolveResponse:
                 kind="audio",
                 label="Best audio",
                 container="m4a",
+                codec="AAC",
                 note="m4a/AAC via yt-dlp",
             )
         )

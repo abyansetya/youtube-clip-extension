@@ -38,6 +38,6 @@ export default defineManifest({
       run_at: 'document_idle',
     },
   ],
-  permissions: ['storage', 'tabs', 'downloads'],
+  permissions: ['storage', 'tabs', 'downloads', 'alarms'],
   host_permissions: ['http://127.0.0.1/*', 'http://localhost/*'],
 })

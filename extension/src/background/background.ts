@@ -11,9 +11,53 @@ import { getSettings, normalizeServiceUrl } from '../shared/settings'
 
 const POLL_INTERVAL_MS = 1000
 const FALLBACK_DOWNLOAD_DELAY_MS = 10_000
+const TRACKED_JOB_KEY = 'trackedJobId'
+const BADGE_ALARM = 'comot-badge'
+const BADGE_COLOR = '#3ea6ff'
 
 const activeJobs = new Map<string, number>()
 const pendingDownloads = new Map<string, number>()
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === BADGE_ALARM) void refreshBadge()
+})
+
+async function refreshBadge(): Promise<void> {
+  const stored = await chrome.storage.session.get(TRACKED_JOB_KEY)
+  const jobId: string | undefined = stored[TRACKED_JOB_KEY]
+  if (!jobId) {
+    await chrome.action.setBadgeText({ text: '' })
+    return
+  }
+  const base = await serviceBase()
+  try {
+    const res = await fetch(`${base}/api/jobs/${jobId}`, { cache: 'no-store' })
+    if (!res.ok) throw new Error(`Job query failed (${res.status})`)
+    const job = (await res.json()) as JobStatusResponse
+    if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+      await chrome.storage.session.remove(TRACKED_JOB_KEY)
+      await chrome.action.setBadgeText({ text: '' })
+      return
+    }
+    const pct = Math.round(job.progress)
+    await chrome.action.setBadgeText({ text: `${pct}%` })
+    await chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR })
+  } catch {
+    await chrome.action.setBadgeText({ text: '' })
+  }
+}
+
+async function trackJob(jobId: string): Promise<void> {
+  await chrome.storage.session.set({ [TRACKED_JOB_KEY]: jobId })
+  await chrome.alarms.create(BADGE_ALARM, { periodInMinutes: 1 })
+  void refreshBadge()
+}
+
+async function untrackJob(): Promise<void> {
+  await chrome.storage.session.remove(TRACKED_JOB_KEY)
+  await chrome.alarms.clear(BADGE_ALARM)
+  await chrome.action.setBadgeText({ text: '' })
+}
 
 async function serviceBase(): Promise<string> {
   const settings = await getSettings()
@@ -236,6 +280,12 @@ chrome.runtime.onMessage.addListener(
       case 'CLAIM_DOWNLOAD':
         cancelFallbackDownload(message.jobId)
         sendResponse({ type: 'CLAIM_DOWNLOAD_RESULT' })
+        return true
+      case 'TRACK_JOB':
+        void trackJob(message.jobId).then(() => sendResponse({ type: 'TRACK_JOB_RESULT' }))
+        return true
+      case 'UNTRACK_JOB':
+        void untrackJob().then(() => sendResponse({ type: 'TRACK_JOB_RESULT' }))
         return true
     }
   },
